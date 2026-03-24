@@ -18,19 +18,32 @@ export default function PianoClient({ room }) {
   const dcMapRef = useRef(new Map()); // peerId -> DataChannel
   const synthRef = useRef(null);
   const [peers, setPeers] = useState([]);
-  const clientIdRef = useRef(`p-${Math.random().toString(36).slice(2,9)}`);
+  const clientIdRef = useRef(`p-${Math.random().toString(36).slice(2, 9)}`);
   const pollingRef = useRef(null);
   const isMountedRef = useRef(true);
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    (async () => {
+  const [audioReady, setAudioReady] = useState(false);
+  const [initialized, setInitialized] = useState(false);
+
+  async function initAudio() {
+    try {
       await Tone.start();
       synthRef.current = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: 'sine' },
         envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
       }).toDestination();
+      setAudioReady(true);
+    } catch (e) {
+      console.warn('Failed to start audio', e);
+    }
+  }
 
+  useEffect(() => {
+    if (!audioReady || initialized) return;
+    setInitialized(true);
+
+    isMountedRef.current = true;
+    (async () => {
       try {
         const announceRes = await fetch(`/api/rooms/${room}`, {
           method: 'POST',
@@ -39,7 +52,6 @@ export default function PianoClient({ room }) {
         });
         const announceData = await announceRes.json();
         const others = Array.isArray(announceData.peers) ? announceData.peers : [];
-        // create offers to existing peers
         for (const other of others) {
           if (!pcMapRef.current.has(other)) {
             await createOfferToPeer(other);
@@ -50,7 +62,6 @@ export default function PianoClient({ room }) {
         console.warn('announce failed', err);
       }
 
-      // start polling for incoming signaling messages
       pollingRef.current = setInterval(() => {
         if (isMountedRef.current) pollSignaling().catch(e => console.warn('poll error', e));
       }, 800);
@@ -59,7 +70,6 @@ export default function PianoClient({ room }) {
     return () => {
       isMountedRef.current = false;
       clearInterval(pollingRef.current);
-      // notify server we are leaving (best-effort)
       try {
         fetch(`/api/rooms/${room}`, {
           method: 'POST',
@@ -68,12 +78,14 @@ export default function PianoClient({ room }) {
         });
       } catch {}
       pcMapRef.current.forEach(pc => {
-        try { pc.close(); } catch {}
+        try {
+          pc.close();
+        } catch {}
       });
       synthRef.current?.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room]);
+  }, [audioReady, initialized, room]);
 
   async function pollSignaling() {
     try {
@@ -81,16 +93,14 @@ export default function PianoClient({ room }) {
       if (!res.ok) return;
       const { offers = [], answers = [], candidates = [] } = await res.json();
 
-      // handle offers: create answer
       for (const o of offers) {
         const from = o.from;
         const sdp = o.sdp;
         if (!from || !sdp) continue;
-        if (pcMapRef.current.has(from)) continue; // already handled
+        if (pcMapRef.current.has(from)) continue;
         await handleIncomingOffer(from, sdp);
       }
 
-      // handle answers: set remote description
       for (const a of answers) {
         const from = a.from;
         const sdp = a.sdp;
@@ -103,21 +113,18 @@ export default function PianoClient({ room }) {
         }
       }
 
-      // handle candidates
       for (const c of candidates) {
         const from = c.from;
         const candidate = c.candidate;
         const pc = pcMapRef.current.get(from);
         if (!pc || !candidate) continue;
         try {
-          // Some browsers accept plain objects; wrap if necessary
           await pc.addIceCandidate(candidate).catch(() => {});
         } catch (e) {
           console.warn('addIceCandidate failed', e);
         }
       }
     } catch (err) {
-      // polling errors are non-fatal
       console.warn('pollSignaling error', err);
     }
   }
@@ -127,25 +134,30 @@ export default function PianoClient({ room }) {
     const pc = new RTCPeerConnection(ICE_CONFIG);
     pcMapRef.current.set(targetPeerId, pc);
 
-    // create data channel
     const dc = pc.createDataChannel('piano');
     setupDataChannel(targetPeerId, dc);
     dcMapRef.current.set(targetPeerId, dc);
 
-    pc.onicecandidate = (ev) => {
+    pc.onicecandidate = ev => {
       if (ev.candidate) {
-        // send candidate to target
         fetch(`/api/rooms/${room}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'ice', peerId: clientIdRef.current, target: targetPeerId, payload: { candidate: ev.candidate } })
+          body: JSON.stringify({
+            action: 'ice',
+            peerId: clientIdRef.current,
+            target: targetPeerId,
+            payload: { candidate: ev.candidate }
+          })
         }).catch(() => {});
       }
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-        try { pc.close(); } catch {}
+      if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+        try {
+          pc.close();
+        } catch {}
         pcMapRef.current.delete(targetPeerId);
         dcMapRef.current.delete(targetPeerId);
         setPeers(prev => prev.filter(p => p !== targetPeerId));
@@ -156,11 +168,15 @@ export default function PianoClient({ room }) {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      // send offer to target
       await fetch(`/api/rooms/${room}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'offer', peerId: clientIdRef.current, target: targetPeerId, payload: { sdp: offer.sdp } })
+        body: JSON.stringify({
+          action: 'offer',
+          peerId: clientIdRef.current,
+          target: targetPeerId,
+          payload: { sdp: offer.sdp }
+        })
       });
     } catch (e) {
       console.warn('createOfferToPeer failed', e);
@@ -174,16 +190,16 @@ export default function PianoClient({ room }) {
         return prev;
       });
     };
-    dc.onmessage = (ev) => {
+    dc.onmessage = ev => {
       try {
         const msg = JSON.parse(ev.data);
         handleRemoteEvent(msg);
-      } catch (e) { /* ignore malformed */ }
+      } catch {}
     };
     dc.onclose = () => {
       setPeers(prev => prev.filter(p => p !== peerId));
     };
-    dc.onerror = (e) => {
+    dc.onerror = e => {
       console.warn('DataChannel error', e);
     };
   }
@@ -193,25 +209,32 @@ export default function PianoClient({ room }) {
     const pc = new RTCPeerConnection(ICE_CONFIG);
     pcMapRef.current.set(from, pc);
 
-    pc.ondatachannel = (ev) => {
+    pc.ondatachannel = ev => {
       const dc = ev.channel;
       dcMapRef.current.set(from, dc);
       setupDataChannel(from, dc);
     };
 
-    pc.onicecandidate = (ev) => {
+    pc.onicecandidate = ev => {
       if (ev.candidate) {
         fetch(`/api/rooms/${room}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'ice', peerId: clientIdRef.current, target: from, payload: { candidate: ev.candidate } })
+          body: JSON.stringify({
+            action: 'ice',
+            peerId: clientIdRef.current,
+            target: from,
+            payload: { candidate: ev.candidate }
+          })
         }).catch(() => {});
       }
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-        try { pc.close(); } catch {}
+      if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+        try {
+          pc.close();
+        } catch {}
         pcMapRef.current.delete(from);
         dcMapRef.current.delete(from);
         setPeers(prev => prev.filter(p => p !== from));
@@ -223,11 +246,15 @@ export default function PianoClient({ room }) {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      // send answer back
       await fetch(`/api/rooms/${room}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'answer', peerId: clientIdRef.current, target: from, payload: { sdp: answer.sdp } })
+        body: JSON.stringify({
+          action: 'answer',
+          peerId: clientIdRef.current,
+          target: from,
+          payload: { sdp: answer.sdp }
+        })
       });
     } catch (e) {
       console.warn('handleIncomingOffer failed', e);
@@ -238,14 +265,16 @@ export default function PianoClient({ room }) {
     const str = JSON.stringify(obj);
     dcMapRef.current.forEach(dc => {
       if (dc && dc.readyState === 'open') {
-        try { dc.send(str); } catch (e) { /* ignore send errors */ }
+        try {
+          dc.send(str);
+        } catch {}
       }
     });
   }
 
   function handleRemoteEvent(e) {
     const { type, midi, velocity = 0.9, ts } = e || {};
-    if (!type || typeof midi !== 'number') return;
+    if (!type || typeof midi !== 'number' || !synthRef.current) return;
     const note = midiToNote(midi);
     const now = Date.now();
     const latency = Math.max(0, now - (ts || now));
@@ -255,23 +284,45 @@ export default function PianoClient({ room }) {
   }
 
   function handleLocalNote(type, midi, velocity = 0.95) {
+    if (!synthRef.current) return;
     const ts = Date.now();
     const event = { type, midi, velocity, ts, clientId: clientIdRef.current };
-    // play locally immediately
     const note = midiToNote(midi);
     if (type === 'note_on') synthRef.current.triggerAttack(note, Tone.now(), velocity);
     if (type === 'note_off') synthRef.current.triggerRelease(note, Tone.now());
-    // broadcast to peers
     broadcast(event);
+  }
+
+  if (!audioReady) {
+    return (
+      <div>
+        <button
+          onClick={initAudio}
+          style={{
+            padding: '12px 20px',
+            background: '#111827',
+            color: 'white',
+            borderRadius: 8,
+            cursor: 'pointer'
+          }}
+        >
+          Click to enable audio
+        </button>
+      </div>
+    );
   }
 
   return (
     <div>
       <div style={{ marginBottom: 8 }}>
-        <strong>Client</strong>: <span style={{ color: '#0f172a' }}>{clientIdRef.current}</span>
+        <strong>Client</strong>:{' '}
+        <span style={{ color: '#0f172a' }}>{clientIdRef.current}</span>
         <span style={{ marginLeft: 12, color: '#6b7280' }}>peers: {peers.length}</span>
       </div>
-      <Keyboard onPlay={(midi) => handleLocalNote('note_on', midi)} onRelease={(midi) => handleLocalNote('note_off', midi)} />
+      <Keyboard
+        onPlay={midi => handleLocalNote('note_on', midi)}
+        onRelease={midi => handleLocalNote('note_off', midi)}
+      />
       <div style={{ marginTop: 12, color: '#6b7280' }}>
         Note: signaling uses HTTP polling. For production, use a persistent signaling server or WebSocket.
       </div>
