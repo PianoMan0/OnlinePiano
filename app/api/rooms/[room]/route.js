@@ -1,17 +1,5 @@
-// app/api/rooms/[room]/route.js
-'use client';
-import PianoClient from './PianoClient';
-
-export default function Page({ params }) {
-  return <PianoClient room={params.id} />;
-}
 import { NextResponse } from 'next/server';
 
-/**
- * Simple in-memory signaling store.
- * Note: still ephemeral on serverless platforms. This file makes the store resilient
- * so it won't crash when a fresh instance handles a request.
- */
 const rooms = new Map();
 
 function ensureRoom(roomId) {
@@ -48,41 +36,34 @@ export async function POST(req, { params }) {
 
   const room = ensureRoom(roomId);
 
-  // Announce presence and return list of other peers
   if (action === 'announce') {
     ensurePeer(room, peerId);
     const others = Array.from(room.peers.keys()).filter(id => id !== peerId);
     return NextResponse.json({ peers: others });
   }
 
-  // Remove peer (optional cleanup)
   if (action === 'leave') {
     room.peers.delete(peerId);
     return NextResponse.json({ ok: true });
   }
 
-  // For signaling messages we require a target
   if (!target) {
     return NextResponse.json({ error: 'Missing target for signaling action' }, { status: 400 });
   }
 
-  // Ensure target bucket exists
   ensurePeer(room, target);
 
   if (action === 'offer') {
-    if (!payload || !payload.sdp) return NextResponse.json({ error: 'Missing sdp in payload' }, { status: 400 });
     room.peers.get(target).offers.push({ from: peerId, sdp: payload.sdp });
     return NextResponse.json({ ok: true });
   }
 
   if (action === 'answer') {
-    if (!payload || !payload.sdp) return NextResponse.json({ error: 'Missing sdp in payload' }, { status: 400 });
     room.peers.get(target).answers.push({ from: peerId, sdp: payload.sdp });
     return NextResponse.json({ ok: true });
   }
 
   if (action === 'ice') {
-    if (!payload || !payload.candidate) return NextResponse.json({ error: 'Missing candidate in payload' }, { status: 400 });
     room.peers.get(target).candidates.push({ from: peerId, candidate: payload.candidate });
     return NextResponse.json({ ok: true });
   }
@@ -99,7 +80,6 @@ export async function GET(req, { params }) {
   const room = ensureRoom(roomId);
   const bucket = ensurePeer(room, peerId);
 
-  // Return and clear queued messages for this peer
   const offers = bucket.offers.splice(0, bucket.offers.length);
   const answers = bucket.answers.splice(0, bucket.answers.length);
   const candidates = bucket.candidates.splice(0, bucket.candidates.length);
