@@ -1,17 +1,16 @@
 // app/api/rooms/[room]/route.js
 import { NextResponse } from 'next/server';
 
-// In-memory signaling store (ephemeral on serverless)
+/**
+ * Simple in-memory signaling store.
+ * Note: still ephemeral on serverless platforms. This file makes the store resilient
+ * so it won't crash when a fresh instance handles a request.
+ */
 const rooms = new Map();
 
-// Force dynamic behavior (no caching)
-export const dynamic = 'force-dynamic';
-
-function ensureRoom(room) {
-  if (!rooms.has(room)) {
-    rooms.set(room, { peers: new Map() });
-  }
-  return rooms.get(room);
+function ensureRoom(roomId) {
+  if (!rooms.has(roomId)) rooms.set(roomId, { peers: new Map() });
+  return rooms.get(roomId);
 }
 
 function ensurePeer(roomObj, peerId) {
@@ -21,57 +20,64 @@ function ensurePeer(roomObj, peerId) {
   return roomObj.peers.get(peerId);
 }
 
-export async function POST(req, { params }) {
-  const room = params.room;
-  let body;
+async function safeJson(req) {
   try {
-    body = await req.json();
+    return await req.json();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    return null;
+  }
+}
+
+export async function POST(req, { params }) {
+  const roomId = params.room;
+  const body = await safeJson(req);
+  if (!body) {
+    return NextResponse.json({ error: 'Invalid or missing JSON body' }, { status: 400 });
   }
 
-  const { action, peerId, payload, target } = body || {};
+  const { action, peerId, payload, target } = body;
   if (!action || !peerId) {
     return NextResponse.json({ error: 'Missing action or peerId' }, { status: 400 });
   }
 
-  const r = ensureRoom(room);
-  const selfBucket = ensurePeer(r, peerId);
+  const room = ensureRoom(roomId);
 
+  // Announce presence and return list of other peers
   if (action === 'announce') {
-    // Return list of other peers
-    const others = Array.from(r.peers.keys()).filter(id => id !== peerId);
+    ensurePeer(room, peerId);
+    const others = Array.from(room.peers.keys()).filter(id => id !== peerId);
     return NextResponse.json({ peers: others });
   }
 
-  if (!target && action !== 'announce') {
-    return NextResponse.json({ error: 'Missing target' }, { status: 400 });
+  // Remove peer (optional cleanup)
+  if (action === 'leave') {
+    room.peers.delete(peerId);
+    return NextResponse.json({ ok: true });
   }
 
+  // For signaling messages we require a target
+  if (!target) {
+    return NextResponse.json({ error: 'Missing target for signaling action' }, { status: 400 });
+  }
+
+  // Ensure target bucket exists
+  ensurePeer(room, target);
+
   if (action === 'offer') {
-    if (!payload?.sdp) {
-      return NextResponse.json({ error: 'Missing offer SDP' }, { status: 400 });
-    }
-    const targetBucket = ensurePeer(r, target);
-    targetBucket.offers.push({ from: peerId, sdp: payload.sdp });
+    if (!payload || !payload.sdp) return NextResponse.json({ error: 'Missing sdp in payload' }, { status: 400 });
+    room.peers.get(target).offers.push({ from: peerId, sdp: payload.sdp });
     return NextResponse.json({ ok: true });
   }
 
   if (action === 'answer') {
-    if (!payload?.sdp) {
-      return NextResponse.json({ error: 'Missing answer SDP' }, { status: 400 });
-    }
-    const targetBucket = ensurePeer(r, target);
-    targetBucket.answers.push({ from: peerId, sdp: payload.sdp });
+    if (!payload || !payload.sdp) return NextResponse.json({ error: 'Missing sdp in payload' }, { status: 400 });
+    room.peers.get(target).answers.push({ from: peerId, sdp: payload.sdp });
     return NextResponse.json({ ok: true });
   }
 
   if (action === 'ice') {
-    if (!payload?.candidate) {
-      return NextResponse.json({ error: 'Missing ICE candidate' }, { status: 400 });
-    }
-    const targetBucket = ensurePeer(r, target);
-    targetBucket.candidates.push({ from: peerId, candidate: payload.candidate });
+    if (!payload || !payload.candidate) return NextResponse.json({ error: 'Missing candidate in payload' }, { status: 400 });
+    room.peers.get(target).candidates.push({ from: peerId, candidate: payload.candidate });
     return NextResponse.json({ ok: true });
   }
 
@@ -79,16 +85,15 @@ export async function POST(req, { params }) {
 }
 
 export async function GET(req, { params }) {
-  const room = params.room;
+  const roomId = params.room;
   const url = new URL(req.url);
   const peerId = url.searchParams.get('peerId');
-  if (!peerId) {
-    return NextResponse.json({ error: 'Missing peerId' }, { status: 400 });
-  }
+  if (!peerId) return NextResponse.json({ error: 'Missing peerId query param' }, { status: 400 });
 
-  const r = ensureRoom(room);
-  const bucket = ensurePeer(r, peerId);
+  const room = ensureRoom(roomId);
+  const bucket = ensurePeer(room, peerId);
 
+  // Return and clear queued messages for this peer
   const offers = bucket.offers.splice(0, bucket.offers.length);
   const answers = bucket.answers.splice(0, bucket.answers.length);
   const candidates = bucket.candidates.splice(0, bucket.candidates.length);
