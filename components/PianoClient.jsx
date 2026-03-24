@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import * as Tone from 'tone';
 import Keyboard from './Keyboard';
 
 const ICE_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
@@ -17,6 +16,7 @@ export default function PianoClient({ room }) {
   const pcMapRef = useRef(new Map());
   const dcMapRef = useRef(new Map());
   const synthRef = useRef(null);
+  const ToneRef = useRef(null); // dynamic Tone.js
 
   const [peers, setPeers] = useState([]);
   const clientIdRef = useRef(`p-${Math.random().toString(36).slice(2, 9)}`);
@@ -26,22 +26,29 @@ export default function PianoClient({ room }) {
   const [audioReady, setAudioReady] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
-  // IMPORTANT: must NOT be async or browsers block audio
-  function initAudio() {
-    console.log("Button clicked — starting Tone…");
+  async function loadTone() {
+    if (!ToneRef.current) {
+      ToneRef.current = await import('tone');
+    }
+    return ToneRef.current;
+  }
 
-    Tone.start().then(() => {
-      console.log("Tone started:", Tone.context.state);
+  async function initAudio() {
+    console.log("Button clicked — loading Tone…");
 
-      synthRef.current = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: 'sine' },
-        envelope: { attack: 0.005, decay: 0.1, sustain: 0.6, release: 1 }
-      }).toDestination();
+    const Tone = await loadTone();
 
-      window.synth = synthRef.current; // debug helper
+    await Tone.start();
+    console.log("Tone started:", Tone.context.state);
 
-      setAudioReady(true);
-    });
+    synthRef.current = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.005, decay: 0.1, sustain: 0.6, release: 1 }
+    }).toDestination();
+
+    window.synth = synthRef.current;
+
+    setAudioReady(true);
   }
 
   useEffect(() => {
@@ -92,8 +99,6 @@ export default function PianoClient({ room }) {
       pcMapRef.current.forEach(pc => {
         try { pc.close(); } catch {}
       });
-
-      // DO NOT dispose synth here — breaks hot reload
     };
   }, [audioReady, initialized, room]);
 
@@ -270,7 +275,7 @@ export default function PianoClient({ room }) {
     if (!type || typeof midi !== 'number' || !synthRef.current) return;
 
     const note = midiToNote(midi);
-    const scheduleTime = Tone.now() + 0.03;
+    const scheduleTime = ToneRef.current.now() + 0.03;
 
     if (type === 'note_on') synthRef.current.triggerAttack(note, scheduleTime, velocity);
     if (type === 'note_off') synthRef.current.triggerRelease(note, scheduleTime);
