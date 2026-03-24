@@ -26,9 +26,11 @@ export default function PianoClient({ room }) {
   const [audioReady, setAudioReady] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
-  async function initAudio() {
-    try {
-      await Tone.start();
+  // IMPORTANT: must NOT be async or browsers block audio
+  function initAudio() {
+    console.log("Button clicked — starting Tone…");
+
+    Tone.start().then(() => {
       console.log("Tone started:", Tone.context.state);
 
       synthRef.current = new Tone.PolySynth(Tone.Synth, {
@@ -36,13 +38,10 @@ export default function PianoClient({ room }) {
         envelope: { attack: 0.005, decay: 0.1, sustain: 0.6, release: 1 }
       }).toDestination();
 
-      // Debug: allow manual testing
-      window.synth = synthRef.current;
+      window.synth = synthRef.current; // debug helper
 
       setAudioReady(true);
-    } catch (e) {
-      console.warn('Failed to start audio', e);
-    }
+    });
   }
 
   useEffect(() => {
@@ -94,7 +93,7 @@ export default function PianoClient({ room }) {
         try { pc.close(); } catch {}
       });
 
-      // Removed synth.dispose() — breaks hot reload
+      // DO NOT dispose synth here — breaks hot reload
     };
   }, [audioReady, initialized, room]);
 
@@ -267,12 +266,10 @@ export default function PianoClient({ room }) {
   }
 
   function handleRemoteEvent(e) {
-    const { type, midi, velocity = 0.9, ts } = e || {};
+    const { type, midi, velocity = 0.9 } = e || {};
     if (!type || typeof midi !== 'number' || !synthRef.current) return;
 
     const note = midiToNote(midi);
-
-    // Schedule remote notes slightly ahead to avoid jitter
     const scheduleTime = Tone.now() + 0.03;
 
     if (type === 'note_on') synthRef.current.triggerAttack(note, scheduleTime, velocity);
