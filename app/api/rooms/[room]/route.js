@@ -25,20 +25,14 @@ async function safeJson(req) {
 export async function POST(req, { params }) {
   const roomId = params.room;
   const body = await safeJson(req);
-  if (!body) {
-    return NextResponse.json({ error: 'Invalid or missing JSON body' }, { status: 400 });
-  }
+  if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
 
   const { action, peerId, payload, target } = body;
-  if (!action || !peerId) {
-    return NextResponse.json({ error: 'Missing action or peerId' }, { status: 400 });
-  }
-
   const room = ensureRoom(roomId);
 
   if (action === 'announce') {
     ensurePeer(room, peerId);
-    const others = Array.from(room.peers.keys()).filter(id => id !== peerId);
+    const others = [...room.peers.keys()].filter(id => id !== peerId);
     return NextResponse.json({ peers: others });
   }
 
@@ -47,9 +41,7 @@ export async function POST(req, { params }) {
     return NextResponse.json({ ok: true });
   }
 
-  if (!target) {
-    return NextResponse.json({ error: 'Missing target for signaling action' }, { status: 400 });
-  }
+  if (!target) return NextResponse.json({ error: 'Missing target' }, { status: 400 });
 
   ensurePeer(room, target);
 
@@ -75,14 +67,13 @@ export async function GET(req, { params }) {
   const roomId = params.room;
   const url = new URL(req.url);
   const peerId = url.searchParams.get('peerId');
-  if (!peerId) return NextResponse.json({ error: 'Missing peerId query param' }, { status: 400 });
 
   const room = ensureRoom(roomId);
   const bucket = ensurePeer(room, peerId);
 
-  const offers = bucket.offers.splice(0, bucket.offers.length);
-  const answers = bucket.answers.splice(0, bucket.answers.length);
-  const candidates = bucket.candidates.splice(0, bucket.candidates.length);
+  const offers = bucket.offers.splice(0);
+  const answers = bucket.answers.splice(0);
+  const candidates = bucket.candidates.splice(0);
 
   return NextResponse.json({ offers, answers, candidates });
 }
