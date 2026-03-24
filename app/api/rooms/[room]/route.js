@@ -1,4 +1,10 @@
 // app/api/rooms/[room]/route.js
+'use client';
+import PianoClient from './PianoClient';
+
+export default function Page({ params }) {
+  return <PianoClient room={params.id} />;
+}
 import { NextResponse } from 'next/server';
 
 /**

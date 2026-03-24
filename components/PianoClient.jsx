@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Keyboard from './Keyboard';
-import { loadTone } from './client/loadTone';
+import { loadTone } from '@/app/tone/loadTone';
 
 const ICE_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
@@ -38,13 +38,17 @@ export default function PianoClient({ room }) {
   console.log("Button clicked — loading Tone…");
 
   const Tone = await loadTone();
+  if (!Tone || !Tone.start) {
+    console.error("Tone failed to load:", Tone);
+    return;
+  }
 
   await Tone.start();
   console.log("Tone started:", Tone.context.state);
 
   synthRef.current = new Tone.PolySynth(Tone.Synth).toDestination();
   setAudioReady(true);
-  }
+}
 
   useEffect(() => {
     if (!audioReady || initialized) return;
