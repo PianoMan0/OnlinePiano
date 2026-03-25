@@ -1,7 +1,8 @@
 {
-  "functions": {
-    "ws.js": {
-      "runtime": "edge"
+  "routes": [
+    {
+      "src": "/ws",
+      "dest": "/ws.js"
     }
-  }
+  ]
 }
