@@ -37,16 +37,15 @@ export default function PianoClient({ room }) {
   async function initAudio() {
   console.log("Button clicked — loading Tone…");
 
-  const Tone = await loadTone();
-  if (!Tone || !Tone.start) {
-    console.error("Tone failed to load:", Tone);
-    return;
-  }
+  const mod = await import("tone");
+  const Tone = mod.default || mod;
 
   await Tone.start();
   console.log("Tone started:", Tone.context.state);
 
   synthRef.current = new Tone.PolySynth(Tone.Synth).toDestination();
+  ToneRef.current = Tone;
+
   setAudioReady(true);
 }
 
