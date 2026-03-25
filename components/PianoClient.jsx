@@ -28,26 +28,25 @@ export default function PianoClient({ room }) {
   const [initialized, setInitialized] = useState(false);
 
   async function loadTone() {
-    if (!ToneRef.current) {
-      ToneRef.current = await import('tone');
-    }
-    return ToneRef.current;
+  if (!ToneRef.current) {
+    const mod = await import("tone");
+    ToneRef.current = mod.default;
   }
+  return ToneRef.current;
+}
 
   async function initAudio() {
   console.log("Button clicked — loading Tone…");
 
-  const mod = await import("tone");
-  const Tone = mod.default || mod;
+  const Tone = await loadTone();
 
   await Tone.start();
   console.log("Tone started:", Tone.context.state);
 
   synthRef.current = new Tone.PolySynth(Tone.Synth).toDestination();
-  ToneRef.current = Tone;
-
   setAudioReady(true);
 }
+
 
   useEffect(() => {
     if (!audioReady || initialized) return;
