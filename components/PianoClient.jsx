@@ -30,10 +30,17 @@ export default function PianoClient({ room }) {
   async function loadTone() {
   if (!ToneRef.current) {
     const mod = await import("tone");
-    ToneRef.current = mod.default;
+
+    const Tone =
+      mod.default?.start ? mod.default :
+      mod.Tone?.start ? mod.Tone :
+      mod;
+
+    ToneRef.current = Tone;
   }
   return ToneRef.current;
 }
+
 
   async function initAudio() {
   console.log("Button clicked — loading Tone…");
