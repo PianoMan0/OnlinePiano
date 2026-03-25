@@ -2,7 +2,7 @@ export const config = {
   runtime: "edge"
 };
 
-const rooms = new Map(); // roomId → Set of WebSockets
+const rooms = new Map(); // roomId → Set<WebSocket>
 
 export default async function handler(req) {
   const { searchParams } = new URL(req.url);
