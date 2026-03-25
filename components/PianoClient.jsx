@@ -46,7 +46,21 @@ export default function PianoClient({ room }) {
   async function initAudio() {
   console.log("Button clicked — loading Tone…");
 
-  const Tone = await loadTone();
+  const mod = await import("tone");
+  console.log("RAW TONE MODULE:", mod);
+
+  const Tone =
+    mod.Tone?.start ? mod.Tone :
+    mod.default?.start ? mod.default :
+    mod.start ? mod :
+    null;
+
+  console.log("RESOLVED TONE:", Tone);
+
+  if (!Tone) {
+    console.error("Could not resolve Tone.js export shape");
+    return;
+  }
 
   await Tone.start();
   console.log("Tone started:", Tone.context.state);
@@ -54,6 +68,7 @@ export default function PianoClient({ room }) {
   synthRef.current = new Tone.PolySynth(Tone.Synth).toDestination();
   setAudioReady(true);
 }
+
 
 
 
