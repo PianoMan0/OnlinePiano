@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Online Piano</title>
+  <style>
+    .key { padding: 20px; margin: 5px; display: inline-block; background: #eee; cursor: pointer; }
+    .active { background: #ccc; }
+  </style>
+</head>
+<body>
+  <h1>Online Piano</h1>
+
+  <input id="room" placeholder="room name" />
+  <button onclick="joinRoom()">Join</button>
+
+  <div id="piano"></div>
+
+  <script>
+    const notes = ["C4","D4","E4","F4","G4","A4","B4"];
+    let ws;
+
+    function playNote(note) {
+      const audio = new Audio(`data:audio/wav;base64,UklGRiQAAABXQVZFZm10...`); 
+      // ^ you can replace this with Web Audio oscillator if you prefer
+      audio.play();
+    }
+
+    function joinRoom() {
+      const room = document.getElementById("room").value || "default";
+      ws = new WebSocket(`wss://${location.host}/ws?room=${room}`);
+
+      ws.onmessage = (msg) => {
+        const note = msg.data;
+        playNote(note);
+        flash(note);
+      };
+    }
+
+    function flash(note) {
+      const el = document.getElementById(note);
+      el.classList.add("active");
+      setTimeout(() => el.classList.remove("active"), 150);
+    }
+
+    const piano = document.getElementById("piano");
+    notes.forEach(note => {
+      const key = document.createElement("div");
+      key.className = "key";
+      key.id = note;
+      key.textContent = note;
+      key.onclick = () => {
+        playNote(note);
+        ws?.send(note);
+      };
+      piano.appendChild(key);
+    });
+  </script>
+</body>
+</html>

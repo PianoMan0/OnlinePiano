@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "ws.js": {
+      "runtime": "edge"
+    }
+  }
+}
