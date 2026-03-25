@@ -1,8 +1,5 @@
 {
   "routes": [
-    {
-      "src": "/ws",
-      "dest": "/ws.js"
-    }
+    { "src": "/ws", "dest": "/ws.js" }
   ]
 }
