@@ -32,14 +32,15 @@ export default function PianoClient({ room }) {
     const mod = await import("tone");
 
     const Tone =
-      mod.default?.start ? mod.default :
       mod.Tone?.start ? mod.Tone :
+      mod.default?.start ? mod.default :
       mod;
 
     ToneRef.current = Tone;
   }
   return ToneRef.current;
 }
+
 
 
   async function initAudio() {
@@ -53,6 +54,7 @@ export default function PianoClient({ room }) {
   synthRef.current = new Tone.PolySynth(Tone.Synth).toDestination();
   setAudioReady(true);
 }
+
 
 
   useEffect(() => {
