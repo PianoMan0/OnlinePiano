@@ -1,0 +1,118 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  background: radial-gradient(circle at top, #020617, #020617 40%, #000000 100%);
+  color: #e5e7eb;
+  min-height: 100vh;
+}
+
+main {
+  padding: 2rem;
+}
+
+.app-container {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.engine {
+  flex: 1;
+}
+
+.engine-title {
+  font-size: 2.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.engine-subtitle {
+  font-size: 0.95rem;
+  color: #9ca3af;
+  margin-bottom: 1.5rem;
+  max-width: 540px;
+}
+
+.engine-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.engine-button {
+  padding: 0.6rem 1.4rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #022c22;
+  box-shadow: 0 10px 25px rgba(34, 197, 94, 0.4);
+  transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.1s ease;
+}
+
+.engine-button.stop {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: #1b1307;
+  box-shadow: 0 10px 25px rgba(248, 113, 113, 0.4);
+}
+
+.engine-button:active {
+  transform: translateY(1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  filter: brightness(0.95);
+}
+
+.engine-status {
+  font-size: 0.9rem;
+  color: #a5b4fc;
+}
+
+.panel {
+  background: rgba(15, 23, 42, 0.9);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  max-width: 360px;
+}
+
+.panel h2 {
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.panel p {
+  font-size: 0.9rem;
+  margin-bottom: 0.35rem;
+  color: #cbd5f5;
+}
+
+.visualizer {
+  margin-top: 1rem;
+  height: 120px;
+  border-radius: 0.75rem;
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.15),
+    rgba(236, 72, 153, 0.15)
+  );
+  border: 1px solid rgba(129, 140, 248, 0.4);
+  overflow: hidden;
+  position: relative;
+}
+
+.visualizer-bar {
+  position: absolute;
+  bottom: 0;
+  width: 6px;
+  border-radius: 999px 999px 0 0;
+  background: linear-gradient(to top, #22c55e, #38bdf8);
+}
