@@ -1,10 +1,10 @@
 "use client";
 
 import "./globals.css";
-import SynthEngine from "@/components/SynthEngine";
-import useTracking from "@/components/useTracking";
-import TrackerPanel from "@/components/TrackerPanel";
-import Visualizer from "@/components/Visualizer";
+import SynthEngine from "./components/SynthEngine";
+import useTracking from "./components/useTracking";
+import TrackerPanel from "./components/TrackerPanel";
+import Visualizer from "./components/Visualizer";
 
 export default function Home() {
   const tracking = useTracking();
